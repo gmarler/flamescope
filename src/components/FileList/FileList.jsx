@@ -35,6 +35,10 @@ const profileOptions = {
         text: 'Open as Netflix Profile',
         value: 'nflxprofile'
     },
+    dtrace: {
+        text: 'Open as DTrace Profile',
+        value: 'dtrace'
+    },
     trace_event: {
         text: 'Open as Trace Event',
         value: 'trace_event'

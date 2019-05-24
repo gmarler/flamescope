@@ -54,6 +54,15 @@ def _is_perf_file(file_path):
         f.close()
         return False
 
+def _is_dtrace_file(file_path):
+    # DTrace output comes in many forms - make it possible to
+    # have several indexed by numbers
+    fname_regex = re.compile(r"\.dtrace(\d+)?$")
+    m = fname_regex.search(file_path)
+    if (m):
+      return True
+    else:
+      return False
 
 def get_file(file_path):
     # ensure the file is below PROFILE_DIR:
@@ -72,7 +81,7 @@ def get_file(file_path):
         raise InvalidFileError('Unknown mime type.')
 
 
-@cached(cache=LRUCache(maxsize=1024))
+#@cached(cache=LRUCache(maxsize=1024))
 def get_profile_type(file_path):
     mime = _get_file_mime(file_path)
     if mime == 'application/octet-stream':
@@ -80,6 +89,8 @@ def get_profile_type(file_path):
     elif mime in ['text/plain', 'application/x-gzip', 'application/gzip']:
         if _is_perf_file(file_path):
             return 'perf'
+        elif _is_dtrace_file(file_path):
+            return 'dtrace'
         else:
             return 'trace_event'
     else:

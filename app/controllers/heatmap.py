@@ -20,6 +20,7 @@
 from math import ceil, floor
 from os.path import join, getmtime
 from app import config
+from app.dtrace.heatmap import dtrace_read_offsets
 from app.perf.heatmap import perf_read_offsets
 from app.cpuprofile.heatmap import cpuprofile_read_offsets
 from app.nflxprofile.heatmap import nflxprofile_readoffsets
@@ -27,7 +28,7 @@ from app.trace_event.heatmap import trace_event_read_offsets
 from app.common.error import InvalidFileError
 
 # global defaults
-YRATIO = 1000  # milliseconds
+YRATIO = 1000  # convert fractional seconds to milliseconds
 DEFAULT_ROWS = 50
 
 # global cache
@@ -50,6 +51,8 @@ def _read_offsets(file_path, file_type):
         return trace_event_read_offsets(file_path, mtime)
     elif file_type == 'nflxprofile':
         return nflxprofile_readoffsets(file_path)
+    elif file_type == 'dtrace':
+        return dtrace_read_offsets(file_path)
     else:
         raise InvalidFileError('Unknown file type.')
 
@@ -59,14 +62,16 @@ def generate_heatmap(filename, file_type, rows=None):
     file_path = join(config.PROFILE_DIR, filename)
     (start, end, offsets) = _read_offsets(file_path, file_type)
     maxvalue = 0
+    count = 1
 
     if rows is None:
         rows = DEFAULT_ROWS
 
     rowoffsets = []
     for i in range(0, rows):
-        rowoffsets.append(YRATIO * (float(i) / rows))
+          rowoffsets.append(YRATIO * (float(i) / rows))
     rowoffsets.reverse()
+    # One column for every second in the heatmap
     cols = int(ceil(end) - floor(start))
     timeoffsets = list(range(0, cols))
     # init cells (values) to zero
@@ -77,10 +82,16 @@ def generate_heatmap(filename, file_type, rows=None):
             emptycol.append(0)
         values.append(emptycol)
     # increment heatmap cells
-    for ts in offsets:
+    for element in offsets:
+        if isinstance(element, list):
+          ts = element[0]
+          count = element[1]
+        else:
+          ts = element
         col = int(floor(ts - floor(start)))
         row = rows - int(floor(rows * (ts % 1))) - 1
-        values[col][row] += 1
+        # Instead of just += 1, add the sample count per stack
+        values[col][row] += count
         if (values[col][row] > maxvalue):
             maxvalue = values[col][row]
 

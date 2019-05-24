@@ -19,6 +19,7 @@
 
 from os.path import join, getmtime
 from app.common.error import InvalidFileError
+from app.dtrace.flame_graph import dtrace_generate_flame_graph
 from app.perf.flame_graph import perf_generate_flame_graph
 from app.cpuprofile.flame_graph import cpuprofile_generate_flame_graph
 from app.nflxprofile.flame_graph import nflxprofile_generate_flame_graph
@@ -37,5 +38,7 @@ def generate_flame_graph(filename, file_type, range_start, range_end, package_na
         return trace_event_generate_flame_graph(file_path, mtime, range_start, range_end)
     elif file_type == 'nflxprofile':
         return nflxprofile_generate_flame_graph(file_path, range_start, range_end, package_name)
+    elif file_type == 'dtrace':
+        return dtrace_generate_flame_graph(file_path, range_start, range_end)
     else:
         raise InvalidFileError('Unknown file type.')
