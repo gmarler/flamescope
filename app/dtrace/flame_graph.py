@@ -84,13 +84,13 @@ def _get_profile_range(file_path):
 # add a stack to the root tree
 def _add_stack(root, stack, count, comm):
     last = root
-    libtype = 'user'
+    current_libtype = 'user'
     for i, pair in enumerate(stack):
         # For DTrace, all stacks start in user space, then transition to kernel space
         # A blank entry in the stack indicates the transition from
         # 'kernel' to 'user' for DTrace
-        if pair[0] == '\n' and pair[1] == '':
-          libtype = 'kernel'
+        #if pair[0] == '\n' and pair[1] == '':
+        #  current_libtype = 'kernel'
 
         # Split inlined frames. "->" is used by software such as java
         # perf-map-agent. For example, "a->b->c" means c() is inlined in b(),
@@ -110,7 +110,7 @@ def _add_stack(root, stack, count, comm):
             # strip leading "L" from java symbols (only reason we need comm):
             if (comm == "java" and name.startswith("L")):
                 name = name[1:]
-            libtype = libtype if n == 0 else "inlined"
+            libtype = library2type(pair[1]) if n == 0 else "inlined"
             n += 1
             found = 0
             for child in last['c']:

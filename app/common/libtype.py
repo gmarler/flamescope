@@ -17,8 +17,11 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import re
 
 def library2type(library):
+    solaris_kernel_regex = re.compile("genunix|unix")
+
     if library == "":
         return ""
     if library.startswith("/tmp/perf-"):
@@ -26,5 +29,7 @@ def library2type(library):
     if library.startswith("["):
         return "kernel"
     if library.find("vmlinux") > 0:
+        return "kernel"
+    if solaris_kernel_regex.search(library):
         return "kernel"
     return "user"
