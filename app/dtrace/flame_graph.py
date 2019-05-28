@@ -22,7 +22,7 @@ import collections
 from flask import abort
 from os.path import getmtime
 from math import ceil, floor
-from app.dtrace.regexp import event_regexp, comm_regexp, frame_regexp
+from app.dtrace.regexp import event_regexp, event_count_regexp, comm_regexp, frame_regexp
 from app.common.fileutil import get_file
 from app.common.libtype import library2type
 
@@ -82,9 +82,16 @@ def _get_profile_range(file_path):
 
 
 # add a stack to the root tree
-def _add_stack(root, stack, comm):
+def _add_stack(root, stack, count, comm):
     last = root
+    libtype = 'user'
     for i, pair in enumerate(stack):
+        # For DTrace, all stacks start in user space, then transition to kernel space
+        # A blank entry in the stack indicates the transition from
+        # 'kernel' to 'user' for DTrace
+        if pair[0] == '\n' and pair[1] == '':
+          libtype = 'kernel'
+
         # Split inlined frames. "->" is used by software such as java
         # perf-map-agent. For example, "a->b->c" means c() is inlined in b(),
         # and b() is inlined in a(). This code will identify b() and c() as
@@ -93,16 +100,17 @@ def _add_stack(root, stack, comm):
         names = pair[0].split('->')
         n = 0
         for j, name in enumerate(names):
+
             val = 0
             # only adding value to the top of the stack
             if i == (len(stack) - 1):
                 if j == (len(names) - 1):
-                    # TODO: For DTrace, val is the occurrence count of the stack
-                    val = 1
+                    # For DTrace, val is the occurrence count of the stack
+                    val = count
             # strip leading "L" from java symbols (only reason we need comm):
             if (comm == "java" and name.startswith("L")):
                 name = name[1:]
-            libtype = library2type(pair[1]) if n == 0 else "inlined"
+            libtype = libtype if n == 0 else "inlined"
             n += 1
             found = 0
             for child in last['c']:
@@ -195,9 +203,10 @@ def dtrace_generate_flame_graph(file_path, range_start=None, range_end=None):
                 for pair in stack:
                     stackstr += pair[0] + ";"
                 if (ts >= start and ts <= end):
-                    root = _add_stack(root, stack, comm)
+                    root = _add_stack(root, stack, event_count, comm)
                 stack = []
-            ts = int(r.group(1))
+            # Convert timestamp to seconds (from microsecs, for DTrace)
+            ts = int(r.group(1)) / 1000000
             if (ts > end + overscan):
                 break
             r = comm_regexp.search(line)
@@ -207,17 +216,31 @@ def dtrace_generate_flame_graph(file_path, range_start=None, range_end=None):
             else:
                 stack.append(["<unknown>", ""])
         else:
+            # - Check for the end of the stack, which consists of a count of how many times
+            #   the event occurred
+            ec = event_count_regexp.search(line)
+            if (ec):
+                event_count = int(ec.group(1))
+                continue
+            # - Check for the stack frame's contents
             r = frame_regexp.search(line)
             if (r):
-                name = r.group(1)
+                name = r.group(2)
+                # For DTrace, our regexp doesn't capture the instruction
+                # offset (+0xfe200...) in the first place
+                # But strip the trailing '`' from the library name
+                library = r.group(1)
+                c = library.find("`")
+                if (c > 0):
+                    library = library[:c]
                 # strip instruction offset (+0xfe200...)
                 c = name.find("+")
                 if (c > 0):
                     name = name[:c]
-                stack.insert(1, [name, r.group(2)])
-    # last stack
+                stack.insert(1, [name, library])
+    # handle the last stack
     if (ts >= start and ts <= end):
-        root = _add_stack(root, stack, comm)
+        root = _add_stack(root, stack, event_count, comm)
 
     # close file
     f.close()
