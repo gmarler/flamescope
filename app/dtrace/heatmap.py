@@ -37,28 +37,38 @@ def dtrace_read_offsets(file_path):
     # process DTrace script output and search for:
     # - event_regexp: to identify event timestamps
     # this populates start, end, and offsets
-    for line in f:
+    for lineno, line in enumerate(f):
         if (line[0] == '#'):
             continue
+        # Is this a new event, or a we're still processing the current event?
         r = event_regexp.search(line)
         if (r):
+            # We've got a new event here
             if (stack != ""):
-                # process prior stack
+                # process prior stack before working on a new one
                 offsets.append([ts, count])
                 # don't try to cache stacks (could be many Gbytes):
                 stack = ""
-            # Convert integer microsecs to seconds
+            # Convert integer microsecs to seconds for DTrace
             ts = int(r.group(1)) / 1000000
+            # event timestamps don't necessarily come in order, so we have
+            # to look for earlier and later ones each time
             if (ts < start):
                 start = ts
+            if (ts > end):
+                end = ts
+            # Now start the first line of the stack off
             stack = line.rstrip()
         else:
-            # If not an event, this is either a stack frame or the ending count of
-            # occurrences of this stack
+            # If not a new event, this is either another stack frame of from
+            # the event we're currently processing, or the ending count of
+            # occurrences of that stack
             cm = event_count_regexp.search(line)
             if (cm):
+                # This is the count of a stack we're finishing up on
                 count = int(cm.group(1))
             else:
+                # Still adding to the current stack...
                 stack += line.rstrip()
     # last stack
     offsets.append([ts, count])

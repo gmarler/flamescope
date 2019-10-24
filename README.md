@@ -99,6 +99,41 @@ $ docker run --rm -it -v /tmp/profiles:/profiles:ro -p 5000:5000 flamescope
 
 Then access FlameScope on [http://127.0.0.1:5000](http://127.0.0.1:5000/)
 
+## Adding a New Profile Parser
+
+### Collecting Profiles In an Appropriate Format
+* User/Kernel Stacks
+* Stack Occurrence Count
+
+### Parsing for Heatmap Generation
+
+```
+#!/usr/sbin/dtrace -qs
+
+/* flamescope_profile.d */
+
+profile-49Hz
+/ curthread->t_pri != -1 /
+{
+  /* Executable Name
+   * timestamp in integer microseconds (converted from nanosecs)
+   * Kernel Stack
+   * User Stack
+   */
+  @[execname,timestamp/1000,stack(),ustack()] = count();
+}
+
+tick-1sec
+{
+  printa("%-16s %u:%k %k %@12u\n",@);
+  trunc(@);
+}
+```
+
+### Parsing for FlameGraph Generation
+
+### Update FlameScope Flask Profile Action for New Profile
+
 ## References
 
 - [FlameScope Introduction (video)](https://www.youtube.com/watch?v=cFuI8SAAvJg)
